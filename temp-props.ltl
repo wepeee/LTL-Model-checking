@@ -1,0 +1,7 @@
+loop_deadlock = G ( F (G exLoop) -> G (F Final) )
+
+source_deadlock = G ( ((exXORsplit) && ! F (exXORjoin)) -> F (deadlock) )
+
+improper_structuring_deadlock = G ( (((exXORsplit && path1) && !path2) && F (ANDjoin_waiting)) -> F (deadlock) )
+
+conditional_livelock = G ( (exGateway1 && exGateway2) -> F ( ! (F Final) ) )

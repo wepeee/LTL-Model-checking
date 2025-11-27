@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_ConditionalLivelock"
+                  targetNamespace="http://example.com/bpmn">
+
+  <bpmn:process id="Process_ConditionalLivelock" isExecutable="false">
+
+    <!-- Start -> mulai -->
+    <bpmn:startEvent id="StartEvent_1" name="start">
+      <bpmn:outgoing>Flow_Start_Mulai</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:task id="Task_Mulai" name="mulai">
+      <bpmn:incoming>Flow_Start_Mulai</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mulai_XORMain</bpmn:outgoing>
+    </bpmn:task>
+
+    <!-- XOR utama: pilih jalur normal / livelock -->
+    <bpmn:exclusiveGateway id="Gateway_XOR_Main" name="pilih jalur">
+      <bpmn:incoming>Flow_Mulai_XORMain</bpmn:incoming>
+      <bpmn:outgoing>Flow_XORMain_Normal</bpmn:outgoing>
+      <bpmn:outgoing>Flow_XORMain_Loop</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Jalur normal -->
+    <bpmn:task id="Task_Normal" name="proses normal">
+      <bpmn:incoming>Flow_XORMain_Normal</bpmn:incoming>
+      <bpmn:outgoing>Flow_Normal_End</bpmn:outgoing>
+    </bpmn:task>
+
+    <bpmn:endEvent id="EndEvent_1" name="end">
+      <bpmn:incoming>Flow_Normal_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Cluster conditional livelock: XOR -> AND -> XOR (tanpa jalan ke end) -->
+    <bpmn:exclusiveGateway id="Gateway_XOR_Loop" name="G1">
+      <bpmn:incoming>Flow_XORMain_Loop</bpmn:incoming>
+      <bpmn:incoming>Flow_And_To_XorLoop</bpmn:incoming>
+      <bpmn:outgoing>Flow_XorLoop_To_And</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:parallelGateway id="Gateway_AND_Loop" name="G2">
+      <bpmn:incoming>Flow_XorLoop_To_And</bpmn:incoming>
+      <bpmn:outgoing>Flow_And_To_XorLoop</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <!-- Sequence flows -->
+    <bpmn:sequenceFlow id="Flow_Start_Mulai"
+                       sourceRef="StartEvent_1" targetRef="Task_Mulai"/>
+    <bpmn:sequenceFlow id="Flow_Mulai_XORMain"
+                       sourceRef="Task_Mulai" targetRef="Gateway_XOR_Main"/>
+
+    <bpmn:sequenceFlow id="Flow_XORMain_Normal"
+                       sourceRef="Gateway_XOR_Main" targetRef="Task_Normal"/>
+    <bpmn:sequenceFlow id="Flow_XORMain_Loop"
+                       sourceRef="Gateway_XOR_Main" targetRef="Gateway_XOR_Loop"/>
+
+    <bpmn:sequenceFlow id="Flow_Normal_End"
+                       sourceRef="Task_Normal" targetRef="EndEvent_1"/>
+
+    <bpmn:sequenceFlow id="Flow_XorLoop_To_And"
+                       sourceRef="Gateway_XOR_Loop" targetRef="Gateway_AND_Loop"/>
+    <bpmn:sequenceFlow id="Flow_And_To_XorLoop"
+                       sourceRef="Gateway_AND_Loop" targetRef="Gateway_XOR_Loop"/>
+
+  </bpmn:process>
+
+</bpmn:definitions>
