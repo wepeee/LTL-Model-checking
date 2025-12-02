@@ -904,162 +904,44 @@ def enrich_labels(g: BPMNGraph, ts: TransitionSystem):
         ts.labeling[gateways_in_loops[1]].add("exGateway2")
 
 
-def mark_conditional_livelock_gateways(g: BPMNGraph, ts: TransitionSystem):
+def mark_conditional_livelock_gateways_simple(g: BPMNGraph, ts: TransitionSystem):
     """
-    Tandai gateway yang berada dalam 'conditional livelock cluster' ala Kurnia.
-
-    Definisi cluster:
-      - SCC (cycle) di graf sequenceFlow,
-      - reachable dari start,
-      - tidak ada path dari node SCC ke end event,
-      - mengandung >= 2 gateway,
-      - ada minimal satu edge langsung gateway -> gateway
-        dengan tipe gateway yang berbeda (mis. XOR -> AND).
-
-    Semua gateway di SCC tersebut diberi label:
-      - exGateway1
-      - exGateway2
-
-    Sehingga formula Kurnia:
-      G((exGateway1 ∧ exGateway2) → F(¬F Final))
-    bernilai true jika dan hanya jika cluster ini benar-benar ada
-    (ingat: di state-state cluster, F Final sudah false selamanya).
+    Very simple 'conditional livelock' marker:
+    - Marks any node that is part of a sequenceFlow from gateway -> gateway.
+    - Does NOT check loops or reachability to end.
+    - This matches the interpretation: livelock is detected when a gateway
+      is directly followed by another gateway (no activity in between).
     """
 
-    # --------------------- build adjacency (sequenceFlow) ---------------------
-    succ: dict[str, list[str]] = {
-        nid: [e.target for e in g.outgoing.get(nid, []) if e.type == "sequenceFlow"]
-        for nid in g.nodes
-    }
-    pred: dict[str, list[str]] = {
-        nid: [e.source for e in g.incoming.get(nid, []) if e.type == "sequenceFlow"]
-        for nid in g.nodes
-    }
-
-    # --------------------- start & end nodes ---------------------
-    start_nodes = [
-        nid for nid, n in g.nodes.items()
-        if (n.type or "").lower().startswith("startevent")
-    ]
-    end_nodes = [
-        nid for nid, n in g.nodes.items()
-        if "endevent" in (n.type or "").lower()
-    ]
-
-    # --------------------- reachable from start ---------------------
-    reachable_from_start: set[str] = set()
-    dq = deque(start_nodes)
-    while dq:
-        v = dq.popleft()
-        if v in reachable_from_start:
-            continue
-        reachable_from_start.add(v)
-        for w in succ.get(v, []):
-            dq.append(w)
-
-    # --------------------- can reach end (reverse BFS) ---------------------
-    can_reach_end: set[str] = set()
-    dq = deque(end_nodes)
-    while dq:
-        v = dq.popleft()
-        if v in can_reach_end:
-            continue
-        can_reach_end.add(v)
-        for w in pred.get(v, []):
-            dq.append(w)
-
-    # --------------------- SCC (Tarjan) di graf BPMN ---------------------
-    index = 0
-    indices: dict[str, int] = {}
-    lowlink: dict[str, int] = {}
-    stack: list[str] = []
-    onstack: set[str] = set()
-    sccs: list[list[str]] = []
-
-    def strongconnect(v: str):
-        nonlocal index
-        indices[v] = index
-        lowlink[v] = index
-        index += 1
-        stack.append(v)
-        onstack.add(v)
-
-        for w in succ.get(v, []):
-            if w not in indices:
-                strongconnect(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif w in onstack:
-                lowlink[v] = min(lowlink[v], indices[w])
-
-        if lowlink[v] == indices[v]:
-            comp: list[str] = []
-            while True:
-                w = stack.pop()
-                onstack.remove(w)
-                comp.append(w)
-                if w == v:
-                    break
-            sccs.append(comp)
-
-    for v in g.nodes.keys():
-        if v not in indices:
-            strongconnect(v)
-
-    # --------------------- bersihkan label lama exGateway1/2 ---------------------
+    # Bersihkan label lama, kalau ada
     for labels in ts.labeling.values():
         labels.discard("exGateway1")
         labels.discard("exGateway2")
 
-    # --------------------- pilih SCC yang termasuk conditional livelock ---------------------
-    for comp in sccs:
-        comp_set = set(comp)
-
-        # harus cycle (lebih dari 1 node, atau self-loop)
-        is_cycle = (
-            len(comp_set) > 1
-            or (len(comp_set) == 1 and comp[0] in succ.get(comp[0], []))
-        )
-        if not is_cycle:
+    for nid, node in g.nodes.items():
+        node_type = (node.type or "").lower()
+        if "gateway" not in node_type:
             continue
 
-        # reachable dari start?
-        if not (comp_set & reachable_from_start):
-            continue
+        # Cek semua sequenceFlow keluar dari gateway ini
+        for e in g.outgoing.get(nid, []):
+            if e.type != "sequenceFlow":
+                continue
 
-        # kalau salah satu node bisa reach end -> bukan livelock
-        if comp_set & can_reach_end:
-            continue
+            tgt_id = e.target
+            tgt_node = g.nodes.get(tgt_id)
+            if tgt_node is None:
+                continue
 
-        # kumpulkan gateway dalam SCC ini
-        gateways = [
-            nid for nid in comp_set
-            if "gateway" in (g.nodes[nid].type or "").lower()
-        ]
-        if len(gateways) < 2:
-            continue
+            tgt_type = (tgt_node.type or "").lower()
+            if "gateway" not in tgt_type:
+                continue
 
-        # cek ada edge langsung gateway -> gateway dengan tipe beda
-        mismatch_edge_found = False
-        for u in gateways:
-            for v in succ.get(u, []):
-                if v in gateways:
-                    t1 = (g.nodes[u].type or "").lower()
-                    t2 = (g.nodes[v].type or "").lower()
-                    if t1 != t2:  # mismatch tipe, mis. exclusiveGateway vs parallelGateway
-                        mismatch_edge_found = True
-                        break
-            if mismatch_edge_found:
-                break
+            # -> Di sini kita punya: gateway (nid) --sequenceFlow--> gateway (tgt_id)
+            # Kita tandai keduanya dengan exGateway1 dan exGateway2
+            ts.labeling.setdefault(nid, set()).update({"exGateway1", "exGateway2"})
+            ts.labeling.setdefault(tgt_id, set()).update({"exGateway1", "exGateway2"})
 
-        if not mismatch_edge_found:
-            # cluster gateway semua XOR atau semua AND dsb, bukan conditional livelock Kurnia
-            continue
-
-        # --------------------- SCC ini adalah conditional livelock cluster ---------------------
-        # tandai semua gateway di dalamnya
-        for nid in gateways:
-            ts.labeling.setdefault(nid, set()).add("exGateway1")
-            ts.labeling[nid].add("exGateway2")
 
 
 
@@ -1413,7 +1295,7 @@ def main():
     # 2b. Enrich labels for LTL properties (loop/source/improper/livelock)
     enrich_labels(g, ts)
 
-    mark_conditional_livelock_gateways(g, ts)
+    mark_conditional_livelock_gateways_simple(g, ts)
 
     # 2c. Detect improper structuring deadlock (XOR-split -> AND-join)
     # mark_improper_structuring_deadlocks(g, ts)
