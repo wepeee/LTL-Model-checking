@@ -37,12 +37,6 @@ Contoh struktur folder:
     │   └── ...
     └── README.md
 
-Kalau nanti kamu pakai `requirements.txt`, install dengan:
-
-    pip install -r requirements.txt
-
----
-
 ## 2. Input Files
 
 ### 2.1. BPMN file (`.bpmn`)
@@ -88,14 +82,7 @@ Jadi semua formula harus dalam format `nama = formula`.
 
 Pola umum pemanggilan:
 
-    python bpmn_ltl_checker.py \
-      --bpmn PATH_TO_BPMN \
-      --props PATH_TO_LTL_FILE \
-      --model-name "MODEL NAME" \
-      --out-json PATH_TO_JSON \
-      --out-cypher PATH_TO_CYPHER \
-      --out-graph-cypher PATH_TO_GRAPH_CYPHER \
-      --max-depth N
+    python bpmn_ltl_checker.py --bpmn PATH_TO_BPMN --props PATH_TO_LTL_FILE --model-name "MODEL NAME" --out-json PATH_TO_JSON --out-cypher PATH_TO_CYPHER --out-graph-cypher PATH_TO_GRAPH_CYPHER --max-depth N
 
 ### 3.1. Argumen
 
@@ -142,14 +129,7 @@ Pola umum pemanggilan:
 
 Dari root project (Windows PowerShell / CMD):
 
-    python .\bpmn_ltl_checker.py ^
-      --bpmn ".\diagram\case simple deadlock.bpmn" ^
-      --props .\props.ltl ^
-      --model-name "case simple deadlock" ^
-      --out-json "case-simple-deadlock.json" ^
-      --out-cypher "case-simple-deadlock.cql" ^
-      --out-graph-cypher "graph-case-simple-deadlock.cql" ^
-      --max-depth 50
+    python .\bpmn_ltl_checker.py --bpmn ".\diagram\case simple deadlock.bpmn" --props .\props.ltl --model-name "case simple deadlock" --out-json "case-simple-deadlock.json" --out-cypher "case-simple-deadlock.cql" --out-graph-cypher "graph-case-simple-deadlock.cql" --max-depth 50
 
 Di Linux/macOS (satu baris):
 
