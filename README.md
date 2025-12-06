@@ -10,7 +10,6 @@ The tool:
   - loop deadlock  
   - source deadlock  
   - improper structuring deadlock  
-  - conditional livelock (gateway–gateway patterns)  
 - Exports results to:
   - **terminal report** (human-readable)
   - **JSON** (machine-readable)
@@ -65,9 +64,6 @@ Contoh struktur folder:
 
     # Improper structuring: XOR-split + pattern cabang + AND-join yang menunggu token selamanya
     improper_structuring_deadlock = G ( (((exXORsplit && path1) && !path2) && F (ANDjoin_waiting)) -> F (deadlock) )
-
-    # Conditional livelock: pola gateway–gateway tanpa jalan keluar ke Final
-    conditional_livelock = G ( (exGateway1 && exGateway2) -> F ( ! (F Final) ) )
 
 **Penting:**  
 Kalau ada baris non-komentar di `props.ltl` yang tidak mengandung `=`, program akan error:
@@ -151,7 +147,7 @@ Contoh output terminal:
           ✓ Ready
 
     [4/5] Loading LTL properties...
-          ✓ 4 properties to verify
+          ✓ 3 properties to verify
 
     [5/5] Verifying properties...
 
@@ -170,8 +166,8 @@ Contoh output terminal:
     VERIFICATION REPORT
     ══════════════════════════════════════════════════════════════════════
 
-    Total Properties: 4
-      ✓ Passed: 3
+    Total Properties: 3
+      ✓ Passed: 2
       ✗ Failed: 1
       ⚠ Errors: 0
 
@@ -266,11 +262,10 @@ Untuk styling (warna/bentuk) di Browser, pakai `:style` dan atur misalnya node d
    - Export sebagai `*.bpmn`.
 
 2. **Definisikan LTL Properties**  
-   - Edit `props.ltl`. Minimal empat formula:
+   - Edit `props.ltl`. Minimal tiga formula:
      - `loop_deadlock`
      - `source_deadlock`
      - `improper_structuring_deadlock`
-     - `conditional_livelock`
 
 3. **Jalankan Checker**  
 
@@ -281,7 +276,7 @@ Untuk styling (warna/bentuk) di Browser, pakai `:style` dan atur misalnya node d
    - Import `*.cql` (violations) untuk tandai node bermasalah.  
 
 5. **Perbaiki Model & Ulangi**  
-   - Perbaiki gateway / message flow yang menyebabkan deadlock / livelock.  
+   - Perbaiki gateway / message flow yang menyebabkan deadlock.  
    - Run lagi sampai model sesuai.
 
 ---
@@ -298,7 +293,6 @@ Untuk styling (warna/bentuk) di Browser, pakai `:style` dan atur misalnya node d
 - Penyebab: banyak loop dan `--max-depth` terlalu besar.
 - Solusi:
   - Kurangi `--max-depth` (misalnya 30 atau 50).
-  - Cek apakah model memang punya livelock besar.
 
 ### 8.3. Graph di Neo4j kosong
 
