@@ -891,171 +891,17 @@ def enrich_labels(g: BPMNGraph, ts: TransitionSystem):
             if preds & b1 and preds & b2:
                 ts.labeling.setdefault(nid, set()).add("exXORjoin")
 
-    # ----------------------------------------------------------
-    # 6. exGateway1 & exGateway2 untuk conditional_livelock
-    #    -> ambil dua gateway pertama yang berada di dalam loop (kalau ada)
-    # ----------------------------------------------------------
-    gateways_in_loops = [
-        nid for nid in loop_nodes
-        if "gateway" in (g.nodes[nid].type or "").lower()
-    ]
-    if len(gateways_in_loops) >= 2:
-        ts.labeling[gateways_in_loops[0]].add("exGateway1")
-        ts.labeling[gateways_in_loops[1]].add("exGateway2")
-
-
-def mark_conditional_livelock_gateways_simple(g: BPMNGraph, ts: TransitionSystem):
-    """
-    Very simple 'conditional livelock' marker:
-    - Marks any node that is part of a sequenceFlow from gateway -> gateway.
-    - Does NOT check loops or reachability to end.
-    - This matches the interpretation: livelock is detected when a gateway
-      is directly followed by another gateway (no activity in between).
-    """
-
-    # Bersihkan label lama, kalau ada
-    for labels in ts.labeling.values():
-        labels.discard("exGateway1")
-        labels.discard("exGateway2")
-
-    for nid, node in g.nodes.items():
-        node_type = (node.type or "").lower()
-        if "gateway" not in node_type:
-            continue
-
-        # Cek semua sequenceFlow keluar dari gateway ini
-        for e in g.outgoing.get(nid, []):
-            if e.type != "sequenceFlow":
-                continue
-
-            tgt_id = e.target
-            tgt_node = g.nodes.get(tgt_id)
-            if tgt_node is None:
-                continue
-
-            tgt_type = (tgt_node.type or "").lower()
-            if "gateway" not in tgt_type:
-                continue
-
-            # -> Di sini kita punya: gateway (nid) --sequenceFlow--> gateway (tgt_id)
-            # Kita tandai keduanya dengan exGateway1 dan exGateway2
-            ts.labeling.setdefault(nid, set()).update({"exGateway1", "exGateway2"})
-            ts.labeling.setdefault(tgt_id, set()).update({"exGateway1", "exGateway2"})
-
-
-
-
-def detect_livelock_structural(g: BPMNGraph):
-    """
-    Deteksi livelock secara struktural (tanpa LTL):
-      - Bangun graf sequenceFlow.
-      - Cari SCC (cycle) yang reachable dari start dan
-        tidak punya path ke end event.
-
-    Return:
-      - livelock_components: list of sets of node ids yang masuk livelock.
-    """
-
-    # ---------- build adjacency ----------
-    succ = {
-        nid: [e.target for e in g.outgoing.get(nid, []) if e.type == "sequenceFlow"]
-        for nid in g.nodes
-    }
-    pred = {
-        nid: [e.source for e in g.incoming.get(nid, []) if e.type == "sequenceFlow"]
-        for nid in g.nodes
-    }
-
-    # ---------- start & end nodes ----------
-    start_nodes = [nid for nid, n in g.nodes.items()
-                   if (n.type or "").lower().startswith("startevent")]
-    end_nodes = [nid for nid, n in g.nodes.items()
-                 if "endevent" in (n.type or "").lower()]
-
-    # ---------- 1. reachable from start ----------
-    reachable_from_start = set()
-    dq = deque(start_nodes)
-    while dq:
-        v = dq.popleft()
-        if v in reachable_from_start:
-            continue
-        reachable_from_start.add(v)
-        for w in succ.get(v, []):
-            dq.append(w)
-
-    # ---------- 2. can_reach_end (reverse BFS) ----------
-    can_reach_end = set()
-    dq = deque(end_nodes)
-    while dq:
-        v = dq.popleft()
-        if v in can_reach_end:
-            continue
-        can_reach_end.add(v)
-        for w in pred.get(v, []):
-            dq.append(w)
-
-    # ---------- 3. SCC (Tarjan) di graf BPMN ----------
-    index = 0
-    indices = {}
-    lowlink = {}
-    stack = []
-    onstack = set()
-    sccs = []
-
-    def strongconnect(v: str):
-        nonlocal index
-        indices[v] = index
-        lowlink[v] = index
-        index += 1
-        stack.append(v)
-        onstack.add(v)
-
-        for w in succ.get(v, []):
-            if w not in indices:
-                strongconnect(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif w in onstack:
-                lowlink[v] = min(lowlink[v], indices[w])
-
-        if lowlink[v] == indices[v]:
-            comp = []
-            while True:
-                w = stack.pop()
-                onstack.remove(w)
-                comp.append(w)
-                if w == v:
-                    break
-            sccs.append(comp)
-
-    for v in g.nodes.keys():
-        if v not in indices:
-            strongconnect(v)
-
-    # ---------- 4. livelock SCC selection ----------
-    livelock_components = []
-
-    for comp in sccs:
-        comp_set = set(comp)
-        # cycle? (lebih dari 1 node atau self-loop)
-        is_cycle = (
-            len(comp_set) > 1 or
-            (len(comp_set) == 1 and comp[0] in succ.get(comp[0], []))
-        )
-        if not is_cycle:
-            continue
-
-        # reachable dari start?
-        if not (comp_set & reachable_from_start):
-            continue
-
-        # ada path ke end? kalau ADA, bukan livelock
-        if any(v in can_reach_end for v in comp_set):
-            continue
-
-        # kalau sampai sini: SCC ini livelock
-        livelock_components.append(comp_set)
-
-    return livelock_components
+    # # ----------------------------------------------------------
+    # # 6. exGateway1 & exGateway2 untuk conditional_livelock
+    # #    -> ambil dua gateway pertama yang berada di dalam loop (kalau ada)
+    # # ----------------------------------------------------------
+    # gateways_in_loops = [
+    #     nid for nid in loop_nodes
+    #     if "gateway" in (g.nodes[nid].type or "").lower()
+    # ]
+    # if len(gateways_in_loops) >= 2:
+    #     ts.labeling[gateways_in_loops[0]].add("exGateway1")
+    #     ts.labeling[gateways_in_loops[1]].add("exGateway2")
 
 
 
@@ -1275,16 +1121,6 @@ def main():
     # 1. Parse BPMN and build graph
     g = parse_bpmn_xml(args.bpmn)
 
-    livelock_sccs = detect_livelock_structural(g)
-
-    if livelock_sccs:
-        print("\n[Extra] Structural livelock detected:")
-        for i, comp in enumerate(livelock_sccs, 1):
-            names = [g.nodes[nid].name or nid for nid in comp]
-            print(f"  - SCC #{i}: " + ", ".join(names))
-    else:
-        print("\n[Extra] No structural livelock detected.")
-
     # 1b. Export graph to Cypher if requested
     if args.out_graph_cypher:
         export_graph_to_cypher(g, args.out_graph_cypher)
@@ -1292,10 +1128,8 @@ def main():
     # 2. Build transition system (Kripke structure)
     ts = bpmn_to_transition_system(g)
 
-    # 2b. Enrich labels for LTL properties (loop/source/improper/livelock)
+    # 2b. Enrich labels for LTL properties (loop/source/improper)
     enrich_labels(g, ts)
-
-    mark_conditional_livelock_gateways_simple(g, ts)
 
     # 2c. Detect improper structuring deadlock (XOR-split -> AND-join)
     # mark_improper_structuring_deadlocks(g, ts)
